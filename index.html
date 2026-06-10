@@ -2,30 +2,49 @@
 <html>
 
 <head>
-	<!-- 文字エンコーディングをUTF-8に設定（日本語などの文字化けを防ぐ） -->
 	<meta charset="utf-8">
 
-	<!-- ブラウザのタブに表示されるページタイトル -->
 	<title>My First Web Map</title>
 
-	<!-- MapLibre GLのスタイルシート（地図の見た目を定義） -->
 	<link href="https://unpkg.com/maplibre-gl@5.3.0/dist/maplibre-gl.css" rel="stylesheet">
 
-	<!-- 独自のスタイルシート（地図のサイズなどをカスタマイズ） -->
 	<link rel="stylesheet" href="style.css">
     
 </head>
+	<body>
 
-<body>
+   <div id="sidebar">
+    <h2>Flight Search</h2>
 
-	<!-- 地図を表示するための空のコンテナ（id="map"で識別） -->
-	<button id="flyButton">
-		✈️ Fly
-	</button>
+    <label>From 🇰🇷</label>
+    <select id="fromAirport">
+        <option value="ICN">INCHEON (ICN)</option>
+        <option value="GMP">GIMPO (GMP)</option>
+        <option value="PUS">GIMHEA (PUS)</option>
+        <option value="CJU">JEJU (CJU)</option> 
+    </select>
 
-	<div id="map"></div>
+    <label>To 🇯🇵</label>
+    <select id="toAirport">
+        <option value="HND">HANEDA (HND)</option>
+        <option value="NRT">NARITA (NRT)</option>
+        <option value="FUK">FUKUOKA (FUK)</option> 
+    </select>
 
-	<!-- MapLibre GLのJavaScriptライブラリを読み込む -->
+    <button id="flyButton">Fly</button>
+    
+    <div id="sidebarDistance" style="margin-top: 20px; font-weight: bold; text-align: center;"></div>
+    </div>
+
+<div id="airportInfo" style="display: none;">
+    <button id="closeInfoBtn">&times;</button> <h3>Airport Info</h3>
+    <p id="infoContent"></p>
+</div>
+
+    </div>
+
+    <div id="map"></div>
+
 	<script src="https://unpkg.com/maplibre-gl@5.3.0/dist/maplibre-gl.js"></script>
 
 	<script>
@@ -33,11 +52,11 @@
 		// ===== 地図の初期化 =====
 		// 新しい地図オブジェクトを作成
 		const map = new maplibregl.Map({
-			container: 'map',  // 地図を表示する要素のID
-			style: 'https://demotiles.maplibre.org/style.json',  // 地図のデザイン（背景地図）
-			center: [126.7419, 37.5069],
-zoom: 5  // 初期ズームレベル（数字が大きいほど拡大）
-		});
+            container: 'map',
+            style: 'https://tiles.openfreemap.org/styles/liberty',
+            center: [131.5, 38.3],
+            zoom: 5.3
+        });
 
 		// ===== ナビゲーションコントロールの追加 =====
 		// 地図の右上にズームボタンと回転ボタンを追加
@@ -45,342 +64,315 @@ zoom: 5  // 初期ズームレベル（数字が大きいほど拡大）
 
 		// ===== マーカーの追加 =====
 		// 地図上にピンを立てる
-		new maplibregl.Marker({
-	color: "red"
-})
-			.setLngLat([139.9709, 35.8623])  // マーカーの位置 [経度, 緯度]（東京駅）
-			.setPopup(
-				// マーカーをクリックしたときに表示されるポップアップ
-				new maplibregl.Popup()
-					.setHTML(`
-	<div style="text-align:center">
+        const airports = {
+            ICN: { name: "Incheon Airport", lng: 126.4505, lat: 37.4602 },
+            GMP: { name: "Gimpo Airport", lng: 126.8019, lat: 37.5583 },
+            PUS: { name: "Gimhae Airport", lng: 128.9382, lat: 35.1796 },
+            CJU: { name: "Jeju Airport", lng: 126.4930, lat: 33.5113 },
+            HND: { name: "HANEDA", lng: 139.7798, lat: 35.5494 },
+            NRT: { name: "NARITA", lng: 140.3929, lat: 35.7720 },
+            NGO: { name: "NAGOYA", lng: 136.8054, lat: 34.8584 },
+            KIX: { name: "KANSAI", lng: 135.2440, lat: 34.4347 },
+            FUK: { name: "FUKUOKA", lng: 130.4507, lat: 33.5859 }  
+        };
+        const routes = {
+            ICN: ["HND", "NRT", "NGO", "KIX", "FUK"],
+            GMP: ["HND", "NGO", "KIX", "FUK"],       
+            PUS: ["NRT", "NGO", "KIX", "FUK"],       
+            CJU: ["NRT", "KIX", "FUK"]                            
+        };
 
-		<h3>Kashiwa Station</h3>
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a =
+                Math.sin(dLat / 2) ** 2 +
+                Math.cos(lat1 * Math.PI / 180) *
+                Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon / 2) ** 2;
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
 
-		<p>
-			1. JR East<br>
-			・Joban Line Rapid<br>
-			・Joban Line Local
-		</p>
+        function updateDistance() {
+            const from = document.getElementById("fromAirport").value;
+            airplaneMarker.setLngLat([
+                airports[from].lng,
+                airports[from].lat
+            ]);
 
-		<p>
-			2. Tobu Railway<br>
-			・Tobu Urban Park Line
-		</p>
+            const to = document.getElementById("toAirport").value;
+            const distance = calculateDistance(
+                airports[from].lat,
+                airports[from].lng,
+                airports[to].lat,
+                airports[to].lng
+            );
+            const flightHours = distance / 800;
 
-		<a
-			href="https://maps.app.goo.gl/pq6NVVZMCLsnAG126"
-			target="_blank"
-            style="text-decoration:none;"
-		>
-        	<div
-				style="
-					display:inline-flex;
-					align-items:center;
-					gap:8px;
+            document.getElementById("sidebarDistance").innerHTML = `
+                ${from} → ${to}<br>
+                Distance : ${Math.round(distance)} km<br>
+                Flight Time : ${flightHours.toFixed(1)} hours
+            `;
+        }
 
-					background:white;
-					padding:10px 14px;
+const locations = [
+            { lng: 126.4505, lat: 37.4602, name: "Incheon International Airport", description: "ICN 🇰🇷", recs: "🌳 T2 Node Garden<br>💤 Darakhyu (Capsule Hotel)<br>🎨 Traditional Cultural Center", ytId: "UvNGdDDQIpo", url: "https://www.airport.kr/sites/ap_en/index.do" },
+            { lng: 128.9382, lat: 35.1796, name: "Gimhae International Airport", description: "PUS 🇰🇷", recs: "☕ Int'l Terminal 3F Cafe Lounge<br>🛍️ Duty-Free Pick-up Zone", ytId: "fn_STo_q9NQ", url: "https://www.airport.co.kr/gimhaeeng/index.do" },
+            { lng: 126.8019, lat: 37.5583, name: "Gimpo International Airport", description: "GMP 🇰🇷", recs: "✈️ National Aviation Museum<br>🛍️ Lotte Mall Gimpo Airport", ytId: "n_UQzMjR1Lo", url: "https://www.airport.co.kr/gimpoeng/index.do" },
+            { lng: 126.4930, lat: 33.5113, name: "Jeju International Airport", description: "CJU 🇰🇷", recs: "🌴 3F Departure Lounge (Maeum-sand Bakery)<br>✈️ Observation Deck (Runway View)", ytId: "reTdIkTQv1w", url: "https://www.airport.co.kr/jejueng/index.do" }, 
+            { lng: 139.7798, lat: 35.5494, name: "Tokyo International Airport", description: "HND 🇯🇵", recs: "🏮 T3 Edo Kooji (Traditional Shopping Street)<br>♨️ Heiwajima Hot Spring Shuttle<br>✈️ T1 Observation Deck", ytId: "RPxPLKPRbeA", url: "https://tokyo-haneda.com/en/index.html" },
+            { lng: 140.3929, lat: 35.7720, name: "Narita International Airport", description: "NRT 🇯🇵", recs: "🛍️ T2 Narita Anime Deck<br>✈️ T1 5th Floor Observation Deck", ytId: "9D7flLnID-A", url: "https://www.narita-airport.jp/en/" },
+            { lng: 136.8054, lat: 34.8584, name: "Chubu Centrair International Airport", description: "NGO 🇯🇵", recs: "✈️ Flight of Dreams (Boeing 787 Display)<br>♨️ Fu no Yu (Bathhouse with Runway View)", ytId: "lNW4AFaV6KE", url: "https://www.centrair.jp/en/" },
+            { lng: 135.2440, lat: 34.4347, name: "Kansai International Airport", description: "KIX 🇯🇵", recs: "🛍️ T1 New Duty-Free Area<br>🚌 Sky View (Observation Hall Shuttle)", ytId: "KU5FmiZ2gKA", url: "https://www.kansai-airport.or.jp/en" },
+            { lng: 130.4507, lat: 33.5859, name: "Fukuoka Airport", description: "FUK 🇯🇵", recs: "🍜 Domestic Terminal 'Ramen Runway'<br>✈️ Domestic Terminal 4F Observation Deck", ytId: "KRzKXPQMsEk", url: "https://www.fukuoka-airport.jp/en/" }                  
+        ];
+        
+        let routeCoordinates = [];
 
-					border-radius:999px;
+        map.on("load", () => {
+            map.addSource("route", {
+                type: "geojson",
+                data: {
+                    type: "Feature",
+                    geometry: {
+                        type: "LineString",
+                        coordinates: routeCoordinates
+                    }
+                }
+            });
 
-					box-shadow:0 2px 10px rgba(0,0,0,0.2);
+            map.addLayer({
+                id: "route",
+                type: "line",
+                source: "route",
+                layout: {
+                    "line-join": "round",
+                    "line-cap": "round"
+                },
+                paint: {
+                    "line-color": "#4285F4",
+                    "line-width": 4
+                }
+            });
+        });
 
-					font-family:sans-serif;
-					font-weight:bold;
-					color:#444;
+       const airplane = document.createElement("div");
 
-					cursor:pointer;
-
-					transition:0.2s;
-				"
-				onmouseover="this.style.transform='scale(1.05)'"
-				onmouseout="this.style.transform='scale(1)'"
-			>
-
-				<img
-					src="https://upload.wikimedia.org/wikipedia/commons/thumb/a/a3/Google_Maps_icon_%282026%29.svg/3840px-Google_Maps_icon_%282026%29.svg.png"
-					width="24"
-				>
-
-				<span>Google Maps</span>
-
-			</div>
-		</a>
-
-	</div>
-`)  // ポップアップの内容（HTML形式）
-			)
-			.addTo(map);  const locations = [
-  { lng: 126.7419, lat: 37.5069, name: "Samsan Gymnasium Station" },
-  
-];
-
-const flightPath = [
-	[126.7419, 37.5069], // Korea
-	[139.9709, 35.8623]  // Japan
-];
-
-
-
-let routeCoordinates = [flightPath[0]];
-
-map.on("load", () => {
-
-	map.addSource("route", {
-		type: "geojson",
-		data: {
-			type: "Feature",
-			geometry: {
-				type: "LineString",
-				coordinates: routeCoordinates
-			}
-		}
-	});
-
-	map.addLayer({
-		id: "route",
-		type: "line",
-		source: "route",
-		layout: {
-			"line-join": "round",
-			"line-cap": "round"
-		},
-		paint: {
-			"line-color": "#4285F4",
-			"line-width": 4
-		}
-	});
-});
-
-
-
-const airplane = document.createElement("div");
+airplane.style.zIndex = "999999"; 
 
 airplane.innerHTML = `
-	<div style="
-		position:relative;
-		width:40px;
-		height:40px;
-	">
+<div id="planeIcon" style="
+    font-size: 30px;
+    display: inline-block;
+    transform-origin: center center;
+    transition: transform 0.1s linear;
+">
 
-		<div
-			id="distanceCounter"
-			style="
-				position:absolute;
-				top:-18px;
-				left:50%;
-				transform:translateX(-50%);
-
-				font-size:13px;
-				font-weight:400;
-				color:white;
-
-text-shadow:
-	-1px -1px 0 black,
-	 1px -1px 0 black,
-	-1px  1px 0 black,
-	 1px  1px 0 black;
-
-				white-space:nowrap;
-				pointer-events:none;
-			"
-		>
-			1200 km
-		</div>
-
-		<div style="
-			position:absolute;
-			left:50%;
-			top:50%;
-
-			transform:
-				translate(-50%, -50%)
-				rotate(53deg);
-
-			font-size:30px;
-		">
-			✈️
-		</div>
-
-	</div>
+</div>
 `;
 
-const airplaneMarker = new maplibregl.Marker({
-	element: airplane
+        const airplaneMarker = new maplibregl.Marker({
+    element: airplane,
+    zIndex: 10
 })
-	.setLngLat(flightPath[0]);
-const distanceLabel = document.createElement("div");
+.setLngLat([
+    airports.ICN.lng,
+    airports.ICN.lat
+])
+.addTo(map);
 
-distanceLabel.innerHTML = "🇰🇷 Korea → 🇯🇵 Japan : 1,200 km";
+        document.getElementById("flyButton").addEventListener("click", () => {
+            map.stop();
 
-distanceLabel.style.background = "white";
-distanceLabel.style.padding = "6px 12px";
-distanceLabel.style.borderRadius = "999px";
-distanceLabel.style.boxShadow = "0 2px 10px rgba(0,0,0,0.2)";
-distanceLabel.style.fontWeight = "bold";
-distanceLabel.style.fontSize = "14px";
+            const from = document.getElementById("fromAirport").value;
+            const to = document.getElementById("toAirport").value;
+            const flightPath = [
+                [airports[from].lng, airports[from].lat],
+                [airports[to].lng, airports[to].lat]
+            ];
+            const start = flightPath[0];
+            const end = flightPath[1];
 
-const distanceMarker = new maplibregl.Marker({
-	element: distanceLabel
-})
-	.setLngLat(flightPath[0]);
+            const totalDistance = calculateDistance(
+                start[1],
+                start[0],
+                end[1],
+                end[0]
+            );
 
+            function calculateBearing(lng1, lat1, lng2, lat2) {
+                const angle = Math.atan2(lat2 - lat1, lng2 - lng1) * 180 / Math.PI;
+                return angle;
+            }
 
+            routeCoordinates = [start];
+            let progress = 0;
 
+            const animation = setInterval(() => {
+                progress += 0.01;
+                const remainingDistance = Math.max(0, (totalDistance * (1 - progress)).toFixed(1));
+                const remainingHours = remainingDistance / 800;
 
-//
-document.getElementById("flyButton").addEventListener("click", () => {
-	airplaneMarker.addTo(map);
-    let progress = 0;
+                document.getElementById("sidebarDistance").innerHTML = `
+                    ${from} → ${to}<br>
+                    Remaining : ${Math.round(remainingDistance)} km<br>
+                    ETA : ${remainingHours.toFixed(1)} hours
+                `;
 
-	const animation = setInterval(() => {
+                const curveHeight = 0.5;
+                const lng = start[0] + (end[0] - start[0]) * progress;
+                const lat = start[1] + (end[1] - start[1]) * progress + Math.sin(progress * Math.PI) * curveHeight;
+                
+                airplaneMarker.setLngLat([lng, lat]);
 
-		progress += 0.01;
+                const nextProgress = progress + 0.01;
 
-		const totalDistance = 1200;
+                if (nextProgress <= 1) {
+                    const nextLng = start[0] + (end[0] - start[0]) * nextProgress;
+                    const nextLat = start[1] + (end[1] - start[1]) * nextProgress + Math.sin(nextProgress * Math.PI) * curveHeight;
+                    const realAngle = calculateBearing(lng, lat, nextLng, nextLat);
+                    document.getElementById("planeIcon").style.transform = `rotate(${realAngle}deg)`;
+                }
+               
+                routeCoordinates.push([lng, lat]);
 
-		const remainingDistance =
-	Math.max(
-		0,
-		(totalDistance * (1 - progress)).toFixed(1)
-	);
+                map.getSource("route").setData({
+                    type: "Feature",
+                    geometry: {
+                        type: "LineString",
+                        coordinates: routeCoordinates
+                    }
+                });
 
-		document.getElementById("distanceCounter").innerHTML =
-			`${remainingDistance} km`;
+                if (progress >= 1) {
+                    clearInterval(animation);
+                   
+                    setTimeout(() => {
+                        routeCoordinates = [];
+                        map.getSource("route").setData({
+                            type: "Feature",
+                            geometry: {
+                                type: "LineString",
+                                coordinates: routeCoordinates
+                            }
+                        });
 
-		const start = flightPath[0];
-const end = flightPath[1];
+                        map.flyTo({
+                            center: [131.5, 38.3],
+                            zoom: 5.3,
+                            speed: 0.5,
+                            essential: true
+                        });
 
-const curveHeight = 0.5;
+                        updateDistance();
+                    }, 550);
+                }
+            }, 30);
+        });
 
-const lng =
-	start[0] + (end[0] - start[0]) * progress;
+        document.getElementById("fromAirport").addEventListener("change", updateDestinationOptions);
+        document.getElementById("toAirport").addEventListener("change", updateDistance);
 
-const lat =
-	start[1] +
-	(end[1] - start[1]) * progress +
-	Math.sin(progress * Math.PI) * curveHeight;
+        updateDestinationOptions();
+        updateDistance();
 
-		
-		airplaneMarker.setLngLat([lng, lat]);
-       
-routeCoordinates.push([lng, lat]);
+        function updateDestinationOptions() {
+            const from = document.getElementById("fromAirport").value;
+            const toSelect = document.getElementById("toAirport");
+            toSelect.innerHTML = "";
 
+            routes[from].forEach(code => {
+                const option = document.createElement("option");
+                option.value = code;
+                option.textContent = airports[code].name + ` (${code})`;
+                toSelect.appendChild(option);
+            });
 
-map.getSource("route").setData({
-	type: "Feature",
-	geometry: {
-		type: "LineString",
-		coordinates: routeCoordinates
-	}
-});
-
-		
-		map.flyTo({
-			center: [lng, lat],
-			zoom: 5,
-			speed: 0.4,
-			essential: true
-		});
-
-		
-	if (progress >= 1) {
-
-	clearInterval(animation);
-
-	setTimeout(() => {
-
-	
-		airplaneMarker.setLngLat(flightPath[0]);
-		airplaneMarker.remove();
-
-
-		routeCoordinates = [flightPath[0]];
-
-		map.getSource("route").setData({
-			type: "Feature",
-			geometry: {
-				type: "LineString",
-				coordinates: routeCoordinates
-			}
-		});
-		map.flyTo({
-			center: flightPath[0],
-
-			zoom: 5,
-
-			speed: 0.8,
-			curve: 1.5,
-
-			essential: true
-		});
-
-	}, 500);
-}
-
-	}, 30);
-});
-
+            updateDistance();
+        }
+        
 locations.forEach(loc => {
-  new maplibregl.Marker({
-	color: "blue"
-})
+    const airport = document.createElement("div");
+    airport.innerHTML = "✈️";
+    airport.style.fontSize = "25px";
+    airport.style.cursor = "pointer";
+
+    airport.addEventListener("click", () => {
+        const infoDiv = document.getElementById("airportInfo");
+        const infoContent = document.getElementById("infoContent");
+        
+        infoContent.innerHTML = `
+            <div style="font-size: 18px; font-weight: bold; margin: 0 0 2px 0; text-align: center; line-height: 1.3;">
+                <a href="${loc.url || '#'}" target="_blank" class="airport-link" style="color: #000; text-decoration: none;">
+                    ${loc.name}
+                </a>
+            </div>
+            <div style="font-size: 14px; text-align: center; color: #555; margin: 0 0 4px 0; padding: 0;">
+                (${loc.description})
+            </div>
+            <hr style="border: 0; border-top: 1px solid #eee; margin: 4px 0; padding: 0;">
+            <div style="font-size: 14px; line-height: 1.6; margin: 0; padding: 0;">
+                <span style="display: block; margin-bottom: 2px;">📍 <strong>Airport Attractions</strong></span>
+                <div style="margin: 0; padding: 0; color: #333; font-weight: 500;">${loc.recs}</div>
+            </div>
+            
+            <hr style="border: 0; border-top: 1px solid #eee; margin: 3px 0; padding: 0;">
+            
+            <div style="margin: 0; padding: 0;">
+                <span style="display: block; font-size: 14px; margin-bottom: 3px;">📺 <strong>Related Video</strong></span>
+                
+                <a href="https://www.youtube.com/watch?v=${loc.ytId}" target="_blank" style="
+                    display: block; 
+                    position: relative; 
+                    width: 100%; 
+                    height: 120px; 
+                    background: url('https://img.youtube.com/vi/${loc.ytId}/mqdefault.jpg') center/cover no-repeat; 
+                    border-radius: 6px; 
+                    text-decoration: none;
+                    box-shadow: inset 0 0 40px rgba(0,0,0,0.3);
+                ">
+                    <div style="
+                        position: absolute; 
+                        top: 50%; 
+                        left: 50%; 
+                        transform: translate(-50%, -50%); 
+                        width: 44px; 
+                        height: 30px; 
+                        background: rgba(255, 0, 0, 0.9); 
+                        border-radius: 6px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    ">
+                        <div style="
+                            width: 0; 
+                            height: 0; 
+                            border-top: 6px solid transparent; 
+                            border-bottom: 6px solid transparent; 
+                            border-left: 10px solid white;
+                            margin-left: 2px;
+                        "></div>
+                    </div>
+                </a>
+            </div>
+        `;
+        infoDiv.style.display = "block"; 
+    });
+
+    new maplibregl.Marker({
+        element: airport
+    })
     .setLngLat([loc.lng, loc.lat])
-    .setPopup(
-      new maplibregl.Popup().setHTML(`
-	<div style="text-align:center">
-
-		<h3>Samsan Gymnasium Station</h3>
-		<p>My Hometown!</p>
-
-		<a
-			href="https://maps.app.goo.gl/jGXNw3bb86jnhU3J9"
-			target="_blank"
-            style="text-decoration:none;"
-		>
-        	<div
-				style="
-					display:inline-flex;
-					align-items:center;
-					gap:8px;
-
-					background:white;
-					padding:10px 14px;
-
-					border-radius:999px;
-
-					box-shadow:0 2px 10px rgba(0,0,0,0.2);
-
-					font-family:sans-serif;
-					font-weight:bold;
-					color:#444;
-
-					cursor:pointer;
-
-					transition:0.2s;
-				"
-				onmouseover="this.style.transform='scale(1.05)'"
-				onmouseout="this.style.transform='scale(1)'"
-			>
-
-				<img
-					src="https://upload.wikimedia.org/wikipedia/commons/thumb/a/a3/Google_Maps_icon_%282026%29.svg/3840px-Google_Maps_icon_%282026%29.svg.png"
-					width="24"
-				>
-
-				<span>Google Maps</span>
-
-			</div>
-		</a>
-`)
-    )
     .addTo(map);
 });
 
-
+document.getElementById("closeInfoBtn").addEventListener("click", () => {
+    document.getElementById("airportInfo").style.display = "none";
+});
 	</script>
 
 </body>
-
 </html>
